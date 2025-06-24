@@ -54,6 +54,53 @@ def plot_first_spike_latencies(spike_trajectories):
     plt.xlabel("Cycle")
     plt.ylabel("Post-spike latency (ms)")
     plt.title("Output spike marches earlier")
+    
+
+def plot_final_weights(weight_trajectories, neuron_names):    # Plot results
+    plt.figure(figsize=(15, 10))
+
+    plt.subplot(2, 2, 3)
+    final_weights = weight_trajectories[-1]
+    colors = ["red" if "City" in name else "blue" for name in neuron_names]
+    bars = plt.bar(neuron_names, final_weights, color=colors, alpha=0.7)
+    plt.ylabel("Final Weight")
+    plt.title("Final Synaptic Weights")
+    plt.xticks(rotation=45)
+
+    # Add text annotations
+    for bar, weight in zip(bars, final_weights):
+        plt.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.01,
+            f"{weight:.3f}",
+            ha="center",
+            va="bottom",
+        )
+
+    plt.subplot(2, 2, 4)
+    weight_changes = final_weights - weight_trajectories[0]
+    colors = [
+        "red" if "City" in name else "green" if change > 0 else "orange"
+        for name, change in zip(neuron_names, weight_changes)
+    ]
+    bars = plt.bar(neuron_names, weight_changes, color=colors, alpha=0.7)
+    plt.ylabel("Weight Change")
+    plt.title("Weight Changes (Final - Initial)")
+    plt.xticks(rotation=45)
+    plt.axhline(y=0, color="black", linestyle="--", alpha=0.5)
+
+    # Add text annotations
+    for bar, change in zip(bars, weight_changes):
+        plt.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + (0.01 if change >= 0 else -0.02),
+            f"{change:+.3f}",
+            ha="center",
+            va="bottom" if change >= 0 else "top",
+        )
+
+    plt.tight_layout()
+    plt.show()
 
 
 # %%
@@ -70,7 +117,7 @@ cfg.tau_exc_decay = 5e-3  # excitatory synaptic decay [s]
 cfg.tau_inh_decay = 5e-3  # inhibitory synaptic decay [s]
 
 cfg.weight_max_exc = (
-    0.5  # max excitatory weight (dimensionless w.r.t. leak conductance)
+    2.0  # max excitatory weight (increased from 0.5 to make spikes possible)
 )
 cfg.weight_fixed_inh = (
     0.05  # max inhibitory weight (dimensionless w.r.t. leak conductance)
@@ -79,7 +126,7 @@ cfg.weight_fixed_inh = (
 # STDP constants
 cfg.tau_plus = 20e-3  # time constant for potentiation [s]
 cfg.tau_minus = 20e-3  # time constant for depression [s]
-cfg.weight_plus = 0.005  # fraction of g_max added per causal pair
+cfg.weight_plus = 0.01  # fraction of g_max added per causal pair (increased)
 cfg.weight_minus = 1.05 * cfg.weight_plus  # fraction of g_max added per causal pair
 
 # Network parameters
@@ -258,62 +305,3 @@ def generate_causal_spike_dataset(T):
     }
 
 
-# %%  Experiment
-
-T = 0.1
-cycles = 10
-
-# Generate the causal spike dataset
-data = generate_causal_spike_dataset(T)
-
-# Plot the input spike trains
-plot_spikes(data.values(), T)
-
-# Convert data to the format expected by run_simulation
-# We need 4 excitatory neurons: smoke, tar, cancer, city
-exc_spike_trains = [
-    data["smoke"].copy(),
-    data["tar"].copy(),
-    data["cancer"].copy(),
-    data["city"].copy(),
-]
-
-# Update network parameters to match our 4 neurons
-cfg.N_exc = 4  # smoke, tar, cancer, city
-
-# Initialize weights for 4 excitatory neurons
-weights = np.full(cfg.N_exc, 0.1 * cfg.weight_max_exc)
-
-spike_trajectories = []
-weight_trajectories = [weights.copy()]
-
-print(f"Initial weights: {weights}")
-
-for cycle in tqdm(range(cycles)):
-    # Reset spike trains for each cycle (make fresh copies)
-    cycle_spike_trains = [
-        data["smoke"].copy(),
-        data["tar"].copy(),
-        data["cancer"].copy(),
-        data["city"].copy(),
-    ]
-
-    spikes, weights, voltage_trace = run_simulation(
-        cycle_spike_trains, np.array([[]]), weights, T, cfg
-    )
-
-    spike_trajectories.append(spikes)
-    weight_trajectories.append(weights.copy())
-
-    print(f"number of spikes: {len(spikes)}")
-
-    # plt.plot(voltage_trace)
-    # plt.show()
-
-print(f"Final weights: {weights}")
-print(f"Weight changes: {weights - weight_trajectories[0]}")
-
-# Plot results
-plot_spikes(spike_trajectories, T)
-plot_weight_trajectories(weight_trajectories)
-plot_first_spike_latencies(spike_trajectories)
